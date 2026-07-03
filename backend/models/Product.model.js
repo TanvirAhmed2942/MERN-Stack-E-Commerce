@@ -9,7 +9,8 @@ const productSchema = new mongoose.Schema(
       required: [true, "Price is required"],
       min: [0, "Price must be a positive number"],
     },
-    category: { type: mongoose.Schema.Types.ObjectId, ref: "Product" },
+    category: { type: mongoose.Schema.Types.ObjectId, ref: "Category" },
+    isFeatured: { type: Boolean, default: false },
     images: [
         {
             url: String,
