@@ -30,9 +30,85 @@ export const getRecommendedProducts = async (req, res) => {
 };
 
 export const getFeaturedProducts = async (req, res) => {
-  console.log("Fetching featured products from database...");
-  res.status(200).json({ message: "Featured products fetched successfully" });
+  try {
+    // 1. Check Redis first
+    const cachedFeaturedProducts = await Redis.get("featuredProducts");
+
+    if (cachedFeaturedProducts) {
+      console.log("Fetching featured products from Redis cache...");
+
+      return res.status(200).json({
+        message: "Featured products fetched successfully",
+        products: JSON.parse(cachedFeaturedProducts),
+      });
+    }
+
+    // 2. Cache miss -> Fetch from MongoDB
+    console.log("Cache miss. Fetching featured products from MongoDB...");
+
+    const featuredProducts = await Product.find({ isFeatured: true }).select(
+      "name description price images"
+    );
+
+    // 3. Save to Redis for 1 hour
+    await Redis.set(
+      "featuredProducts",
+      JSON.stringify(featuredProducts),
+      "EX",
+      3600
+    );
+
+    return res.status(200).json({
+      message: "Featured products fetched successfully",
+      products: featuredProducts,
+    });
+  } catch (error) {
+    console.error("Error fetching featured products:", error);
+
+    return res.status(500).json({
+      message: "Internal server error",
+    });
+  }
 };
+
+export const toggleFeaturedProduct = async (req, res) => {
+  try {
+    const { productId } = req.params;
+    // console.log(`From params : ${productId}`);
+    const product = await Product.findById(productId);
+    if (!product) {
+      return res.status(404).json({ message: "Product not found" });
+    }
+    product.isFeatured = !product.isFeatured;
+    await product.save();
+
+    //Caching the updated product in Redis
+    await updateFeaturedProductsCache(productId, product);
+    
+    res.status(200).json({ message: "Product featured status toggled successfully", product:{ _id: product._id, isFeatured: product.isFeatured ,images: product.images.map(image => image.url)},description: product.description, price: product.price, name: product.name });
+  } catch (error) {
+    console.error("Error toggling featured product:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+
+async function updateFeaturedProductsCache(productId, product) {
+  try {
+    const cachedFeaturedProducts = await Redis.get("featuredProducts");
+    console.log("Cached featured products:", cachedFeaturedProducts);
+    let featuredProducts = cachedFeaturedProducts ? JSON.parse(cachedFeaturedProducts) : [];
+    if (product.isFeatured) {
+      featuredProducts.push(product);
+    } else {
+      featuredProducts = featuredProducts.filter(p => p._id.toString() !== productId);
+    }
+    await Redis.set("featuredProducts", JSON.stringify(featuredProducts), 'EX', 3600); // Cache for 1 hour
+    console.log("Updated featured products cache:", featuredProducts);
+  } catch (error) {
+    console.error("Error updating featured products cache:", error);
+  }
+}
 
 export const getProductsByCategory = async (req, res) => {
   try{
@@ -46,6 +122,7 @@ export const getProductsByCategory = async (req, res) => {
       return res.status(404).json({ message: "No products found for this category" });
     }
     const result = products.map(product => ({
+      _id: product._id,
       name: product.name,
       description: product.description, 
       price: product.price,
