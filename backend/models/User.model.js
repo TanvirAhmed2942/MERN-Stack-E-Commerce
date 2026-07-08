@@ -21,7 +21,7 @@ const userSchema = new mongoose.Schema(
     cartitems: [
       {
         productId: { type: mongoose.Schema.Types.ObjectId, ref: "Product" },
-        quantity: { type: Number, default: 1 },
+        quantity: { type: Number, default: 0, min: [1, "Quantity must be at least 1"] },
       },
     ],
   },
