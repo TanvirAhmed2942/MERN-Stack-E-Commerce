@@ -5,7 +5,12 @@ import User from "../models/user.model.js";
 
 
 export const getAllCartItems = async (req, res) => {
-    res.status(200).json({ message: "Get all cart items" });
+    const userId = req.user._id;
+    if (!userId) {
+        return res.status(400).json({ message: "User ID is required" });
+    }
+    const user = await User.findById(userId).populate("cartitems.productId", "name price images.url");
+    res.status(200).json({ message: "Get all cart items", cartitems: user.cartitems });
 }
 
 export const addToCart = async (req, res) => {
@@ -66,9 +71,37 @@ export const addToCart = async (req, res) => {
 };
 
 export const updateQuantity = async (req, res) => {
+    
     const { id } = req.params;
     const { quantity } = req.body;
-    const userId = req.user._id;}
+    const userId = req.user._id;
+    // console.log("Updating quantity for cart item ID:", id, "with quantity:", quantity, "for user ID:", userId);
+
+    if (!quantity || quantity <= 0) {
+        return res.status(400).json({
+            message: "Quantity is required and must be greater than 0",
+        });
+    }
+    const user = await User.findById(userId);
+    const existingProduct = user.cartitems.find(
+        (item) => item._id.toString() === id
+    );
+
+    if (!existingProduct) {
+        return res.status(404).json({
+            message: "Item not found in cart",
+        });
+    }
+
+    await User.updateOne(
+        { _id: userId, "cartitems._id": id },
+        { $set: { "cartitems.$.quantity": quantity } }
+    );
+
+    return res.status(200).json({
+        message: "Cart quantity updated successfully",
+    });
+};
 
 export const removeAllFromCartByProductId = async (req, res) => {
     const { productId } = req.body;
