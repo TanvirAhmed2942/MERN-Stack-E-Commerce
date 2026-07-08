@@ -10,7 +10,8 @@ export const getAllCartItems = async (req, res) => {
         return res.status(400).json({ message: "User ID is required" });
     }
     const user = await User.findById(userId).populate("cartitems.productId", "name price images.url");
-    res.status(200).json({ message: "Get all cart items", cartitems: user.cartitems });
+    const totalPrice = user.cartitems.reduce((total, item) => total + item.productId.price * item.quantity, 0);
+    res.status(200).json({ message: "Get all cart items", totalItems: user.cartitems.length, totalPrice, cartitems: user.cartitems });
 }
 
 export const addToCart = async (req, res) => {
